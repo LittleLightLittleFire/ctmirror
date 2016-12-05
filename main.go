@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -68,7 +69,15 @@ func main() {
 	}
 
 	// Set the start index
-	scannerOptions := scanner.DefaultScannerOptions()
+	scannerOptions := scanner.ScannerOptions{
+		Matcher:       &scanner.MatchAll{},
+		PrecertOnly:   false,
+		BatchSize:     5000,
+		NumWorkers:    runtime.GOMAXPROCS(-1),
+		ParallelFetch: runtime.GOMAXPROCS(-1),
+		StartIndex:    0,
+		Quiet:         false,
+	}
 	if err := db.Get(&scannerOptions.StartIndex, "SELECT COALESCE(MAX(ID), -1)+1 FROM entries"); err != nil {
 		log.Fatalln("Failed to get current entry:", err)
 	}
@@ -107,7 +116,7 @@ func main() {
 		}
 	}
 
-	scanner := scanner.NewScanner(lc, *scannerOptions)
+	scanner := scanner.NewScanner(lc, scannerOptions)
 	if err := scanner.Scan(found, found); err != nil {
 		log.Fatalln("Failed to scan:", err)
 	}
