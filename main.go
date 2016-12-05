@@ -69,7 +69,7 @@ func main() {
 
 	// Set the start index
 	scannerOptions := scanner.DefaultScannerOptions()
-	if err := db.Get(&scannerOptions.StartIndex, "SELECT COALESCE(MAX(ID), 0) FROM entries"); err != nil {
+	if err := db.Get(&scannerOptions.StartIndex, "SELECT COALESCE(MAX(ID), -1)+1 FROM entries"); err != nil {
 		log.Fatalln("Failed to get current entry:", err)
 	}
 
