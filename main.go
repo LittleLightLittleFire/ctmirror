@@ -90,7 +90,7 @@ func main() {
 	signal.Notify(interrupted, os.Interrupt, syscall.SIGTERM)
 
 	fixUTF8 := func(s string) string {
-		return string([]rune(s))
+		return strings.Replace(string([]rune(s)), "\x00", "", -1)
 	}
 
 	found := func(entry *ct.LogEntry) {

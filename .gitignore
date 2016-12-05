@@ -1,3 +1,4 @@
 ctmirror
+deploy.sh
 *.swp
 *.yml
