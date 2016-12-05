@@ -1,7 +1,7 @@
 ctmirror
 ========
 
-Scans the CT log and stores the CN, Issuer, []DNSName of each certificate into a SQL database.
+Scans the certificate transparency log and stores the `Subject`, `Issuer`, `[]DNSName` of each certificate into a SQL database.
 
 ## Set up ##
 
