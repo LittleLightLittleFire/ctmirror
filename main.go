@@ -101,20 +101,26 @@ func main() {
 		default:
 		}
 
+		// It is either a certificate or a pre-certificate
+		cert := entry.X509Cert
+		if cert == nil {
+			cert = &entry.Precert.TBSCertificate
+		}
+
 		if _, err := db.Exec(
 			db.Rebind("INSERT INTO entries VALUES (?, ?, ?, ?, ?, ?, ?)"),
 			entry.Index,
-			fixUTF8(entry.X509Cert.Issuer.CommonName),
-			fixUTF8(strings.Join(entry.X509Cert.Issuer.Organization, ";")),
-			fixUTF8(entry.X509Cert.Subject.CommonName),
-			fixUTF8(strings.Join(entry.X509Cert.Subject.Organization, ";")),
-			entry.X509Cert.NotBefore,
-			entry.X509Cert.NotAfter,
+			fixUTF8(cert.Issuer.CommonName),
+			fixUTF8(strings.Join(cert.Issuer.Organization, ";")),
+			fixUTF8(cert.Subject.CommonName),
+			fixUTF8(strings.Join(cert.Subject.Organization, ";")),
+			cert.NotBefore,
+			cert.NotAfter,
 		); err != nil {
 			log.Fatalln("Failed to insert entry:", err)
 		}
 
-		for _, v := range entry.X509Cert.DNSNames {
+		for _, v := range cert.DNSNames {
 			if _, err := db.Exec(
 				db.Rebind("INSERT INTO dnsnames (entry, dnsname) VALUES (?, ?)"),
 				entry.Index,
