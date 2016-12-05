@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,6 +22,8 @@ import (
 )
 
 func main() {
+	log.SetFlags(log.Lshortfile | log.LstdFlags | log.Lmicroseconds)
+
 	environment := os.Getenv("ENV")
 	if environment == "" {
 		environment = "development"
@@ -86,6 +89,10 @@ func main() {
 	interrupted := make(chan os.Signal, 1)
 	signal.Notify(interrupted, os.Interrupt, syscall.SIGTERM)
 
+	fixUTF8 := func(s string) string {
+		return string([]rune(s))
+	}
+
 	found := func(entry *ct.LogEntry) {
 		// Exit here if interrupted
 		select {
@@ -95,10 +102,12 @@ func main() {
 		}
 
 		if _, err := db.Exec(
-			db.Rebind("INSERT INTO entries VALUES (?, ?, ?, ?, ?)"),
+			db.Rebind("INSERT INTO entries VALUES (?, ?, ?, ?, ?, ?, ?)"),
 			entry.Index,
-			entry.X509Cert.Issuer.CommonName,
-			entry.X509Cert.Subject.CommonName,
+			fixUTF8(entry.X509Cert.Issuer.CommonName),
+			fixUTF8(strings.Join(entry.X509Cert.Issuer.Organization, ";")),
+			fixUTF8(entry.X509Cert.Subject.CommonName),
+			fixUTF8(strings.Join(entry.X509Cert.Subject.Organization, ";")),
 			entry.X509Cert.NotBefore,
 			entry.X509Cert.NotAfter,
 		); err != nil {
@@ -109,7 +118,7 @@ func main() {
 			if _, err := db.Exec(
 				db.Rebind("INSERT INTO dnsnames (entry, dnsname) VALUES (?, ?)"),
 				entry.Index,
-				v,
+				fixUTF8(v),
 			); err != nil {
 				log.Fatalln("Failed to insert entry:", err)
 			}

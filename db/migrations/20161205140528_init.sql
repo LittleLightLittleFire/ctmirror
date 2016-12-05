@@ -4,28 +4,30 @@
 -- Entries of the CT tree
 CREATE TABLE entries (
      -- ID of the entry in the CT tree
-    id           bigint    PRIMARY KEY,
+    id                   bigint    PRIMARY KEY,
 
     -- CommonName of the issuer
-    issuer       text      NOT NULL,
+    issuer               text      NOT NULL,
+    issuer_organisation  text      NOT NULL,
 
     -- Subject of the certificate
-    subject      text      NOT NULL,
+    subject              text      NOT NULL,
+    subject_organisation text      NOT NULL,
 
     -- Validitiy
-    not_before    timestamp NOT NULL,
-    not_after     timestamp NOT NULL
+    not_before           timestamp NOT NULL,
+    not_after            timestamp NOT NULL
 );
 
 -- Each certificate can specify an array of DNSNames
 CREATE TABLE dnsnames (
-    id           bigserial PRIMARY KEY,
+    id      bigserial PRIMARY KEY,
 
     -- The certificate being referenced
-    entry        bigint    NOT NULL REFERENCES Entries(id),
+    entry   bigint    NOT NULL REFERENCES Entries(id),
 
     -- The DNSName included in the certificate
-    dnsname      text      NOT NULL
+    dnsname text      NOT NULL
 );
 
 -- +goose Down
