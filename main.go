@@ -1,17 +1,19 @@
 package main
 
 import (
+	"bufio"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
-
-	"bitbucket.org/liamstask/goose/lib/goose"
-	"github.com/jmoiron/sqlx"
 
 	ct "github.com/google/certificate-transparency/go"
 	"github.com/google/certificate-transparency/go/client"
@@ -24,36 +26,40 @@ import (
 func main() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags | log.Lmicroseconds)
 
-	environment := os.Getenv("ENV")
-	if environment == "" {
-		environment = "development"
+	var startIndex int64
+	var logURL string
+
+	flag.Int64Var(&startIndex, "start", 0, "starting index of the dump")
+	flag.StringVar(&logURL, "log", "http://ct.googleapis.com/aviator", "the ct log url")
+
+	dataDir := "data/"
+	entryFileName := path.Join(dataDir, "entries.csv")
+	dnsFileName := path.Join(dataDir, "dnsnames.csv")
+
+	// Create the data directory
+	if err := os.MkdirAll(dataDir, 0744); err != nil {
+		log.Fatalln("Failed to make data directory:", err)
 	}
 
-	dbFolder := os.Getenv("DB_FOLDER")
-	if dbFolder == "" {
-		dbFolder = "db"
-	}
-
-	logURL := os.Getenv("LOG_URL")
-	if logURL == "" {
-		logURL = "http://ct.googleapis.com/aviator"
-	}
-
-	// Connect to the database
-	conf, err := goose.NewDBConf(dbFolder, environment, "")
+	// Open files for writing
+	entryFile, err := os.OpenFile(entryFileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Fatalln("Failed to read db/dbconf.yml:", err)
+		log.Fatalln("Failed to open entry file for writing:", err)
 	}
+	defer entryFile.Close()
 
-	rawDB, err := goose.OpenDBFromDBConf(conf)
+	dnsFile, err := os.OpenFile(dnsFileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Fatalln("Failed to open db:", err)
+		log.Fatalln("Failed to open dns file for writing:", err)
 	}
+	defer dnsFile.Close()
 
-	db := sqlx.NewDb(rawDB, conf.Driver.Name)
-	if err := db.Ping(); err != nil {
-		log.Fatalln("Failed to ping db:", err)
-	}
+	// Set up writers
+	entryFileWriter := bufio.NewWriter(entryFile)
+	defer entryFileWriter.Flush()
+
+	dnsFileWriter := bufio.NewWriter(dnsFile)
+	defer dnsFileWriter.Flush()
 
 	// Create the CT log client
 	lc, err := client.New(logURL,
@@ -76,21 +82,20 @@ func main() {
 		Matcher:       &scanner.MatchAll{},
 		PrecertOnly:   false,
 		BatchSize:     5000,
-		NumWorkers:    runtime.GOMAXPROCS(-1),
+		NumWorkers:    1,
 		ParallelFetch: runtime.GOMAXPROCS(-1),
 		StartIndex:    0,
 		Quiet:         false,
-	}
-	if err := db.Get(&scannerOptions.StartIndex, "SELECT COALESCE(MAX(ID), -1)+1 FROM entries"); err != nil {
-		log.Fatalln("Failed to get current entry:", err)
 	}
 
 	// Set a signal handler to prevent data corruption
 	interrupted := make(chan os.Signal, 1)
 	signal.Notify(interrupted, os.Interrupt, syscall.SIGTERM)
 
-	fixUTF8 := func(s string) string {
-		return strings.Replace(string([]rune(s)), "\x00", "", -1)
+	checkError := func(_ int, err error) {
+		if err != nil {
+			log.Fatalln(err)
+		}
 	}
 
 	found := func(entry *ct.LogEntry) {
@@ -107,27 +112,22 @@ func main() {
 			cert = &entry.Precert.TBSCertificate
 		}
 
-		if _, err := db.Exec(
-			db.Rebind("INSERT INTO entries VALUES (?, ?, ?, ?, ?, ?, ?)"),
-			entry.Index,
-			fixUTF8(cert.Issuer.CommonName),
-			fixUTF8(strings.Join(cert.Issuer.Organization, ";")),
-			fixUTF8(cert.Subject.CommonName),
-			fixUTF8(strings.Join(cert.Subject.Organization, ";")),
-			cert.NotBefore,
-			cert.NotAfter,
-		); err != nil {
-			log.Fatalln("Failed to insert entry:", err)
-		}
+		checkError(entryFileWriter.WriteString(fmt.Sprint(entry.Index)))
+		checkError(entryFileWriter.WriteString(","))
+		checkError(entryFileWriter.WriteString(strconv.Quote(cert.Issuer.CommonName)))
+		checkError(entryFileWriter.WriteString(","))
+		checkError(entryFileWriter.WriteString(strconv.Quote(strings.Join(cert.Issuer.Organization, ";"))))
+		checkError(entryFileWriter.WriteString(","))
+		checkError(entryFileWriter.WriteString(strconv.Quote(cert.Subject.CommonName)))
+		checkError(entryFileWriter.WriteString(","))
+		checkError(entryFileWriter.WriteString(strconv.Quote(strings.Join(cert.Subject.Organization, ";"))))
+		checkError(entryFileWriter.WriteString("\n"))
 
 		for _, v := range cert.DNSNames {
-			if _, err := db.Exec(
-				db.Rebind("INSERT INTO dnsnames (entry, dnsname) VALUES (?, ?)"),
-				entry.Index,
-				fixUTF8(v),
-			); err != nil {
-				log.Fatalln("Failed to insert entry:", err)
-			}
+			checkError(dnsFileWriter.WriteString(fmt.Sprint(entry.Index)))
+			checkError(dnsFileWriter.WriteString(","))
+			checkError(dnsFileWriter.WriteString(strconv.Quote(v)))
+			checkError(dnsFileWriter.WriteString("\n"))
 		}
 	}
 

@@ -1,4 +1,6 @@
 ctmirror
+data/
 deploy.sh
 *.swp
 *.yml
+*.csv
