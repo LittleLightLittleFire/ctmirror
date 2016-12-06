@@ -1,17 +1,11 @@
 ctmirror
 ========
 
-Scans the certificate transparency log and stores the `Subject`, `Issuer`, `[]DNSName` of each certificate into a SQL database.
-
-## Set up ##
-
-1. Install [goose](https://bitbucket.org/liamstask/goose/)
-3. Edit `db/dbconf.yml`, a sample file is provided
-2. `goose up`
+Scans the certificate transparency log and stores the `Subject`, `Issuer`, `[]DNSName` of each certificate into a set of csv files.
 
 ## Running ##
 
     go build
     ./ctmirror
 
-Each time you run it will update from the last fetched index.
+It currently does not store the starting index, you'll need to pass it in yourself via the arguments. ~9 hours to sync on a domestic connection.
