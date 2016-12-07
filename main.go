@@ -30,7 +30,7 @@ func main() {
 	var logURL string
 
 	flag.Int64Var(&startIndex, "start", 0, "starting index of the dump")
-	flag.StringVar(&logURL, "log", "http://ct.googleapis.com/aviator", "the ct log url")
+	flag.StringVar(&logURL, "log", "http://ct.googleapis.com/pilot", "the ct log url")
 
 	dataDir := "data/"
 	entryFileName := path.Join(dataDir, "entries.csv")
